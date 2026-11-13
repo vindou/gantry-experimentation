@@ -1,0 +1,268 @@
+\section*{Inputs, states, and outputs}
+\begin{align}
+\mathbf{u} &= \begin{bmatrix} \tau_A & \tau_B \end{bmatrix}^{\mathsf T}
+  && \text{servo torques (inputs)} \\
+\mathbf{q} &= \begin{bmatrix} x & y & \theta_A & \theta_B \end{bmatrix}^{\mathsf T}
+  && \text{generalized coordinates} \\
+\mathbf{z} &= \begin{bmatrix} \mathbf{q}^{\mathsf T} & \dot{\mathbf{q}}^{\mathsf T} \end{bmatrix}^{\mathsf T}
+  \in \mathbb{R}^{8}
+  && \text{state} \\
+\mathbf{y}_o &= \begin{bmatrix} x & y \end{bmatrix}^{\mathsf T}
+  && \text{carriage position (controlled output)} \\
+\mathbf{y}_m &= \begin{bmatrix} \theta_A & \theta_B \end{bmatrix}^{\mathsf T}
+  && \text{servo encoder angles (measured output)}
+\end{align}
+
+\section*{Belt stretch}
+% r_A, r_B: signed effective pulley radii (sign = rotation direction,
+% magnitude = pitch radius / gear ratio)
+\begin{align}
+e_A &= r_A\,\theta_A - (x + y), &
+\dot{e}_A &= r_A\,\dot{\theta}_A - (\dot{x} + \dot{y}), \\
+e_B &= r_B\,\theta_B - (x - y), &
+\dot{e}_B &= r_B\,\dot{\theta}_B - (\dot{x} - \dot{y}).
+\end{align}
+
+\section*{Position-dependent belt stiffness}
+% kappa_i: belt tensile stiffness E*A [N]
+% L_i: total length of belt i,  ell_i: short-span length at x = y = 0
+\begin{align}
+\ell_A(x,y) &= \ell_{A0} + x + y, &
+\ell_B(x,y) &= \ell_{B0} - x + y, \\
+k_i &= \kappa_i \left( \frac{1}{\ell_i} + \frac{1}{L_i - \ell_i} \right), &
+k_i' &= \frac{\partial k_i}{\partial \ell_i}
+      = \kappa_i \left( -\frac{1}{\ell_i^{2}} + \frac{1}{(L_i - \ell_i)^{2}} \right),
+\qquad i \in \{A, B\}.
+\end{align}
+
+\section*{Net belt force}
+\begin{equation}
+T_i = k_i\,e_i + c_i\,\dot{e}_i, \qquad i \in \{A, B\}.
+\end{equation}
+
+\section*{Friction}
+% One function for each location j in {x, y, A, B}, with its own parameters
+\begin{equation}
+\phi_j(v) = \left[ F_{c,j} + \left( F_{s,j} - F_{c,j} \right)
+  e^{-\left( v / v_{s,j} \right)^{2}} \right]
+  \tanh\!\left( \frac{v}{v_{\varepsilon,j}} \right) + b_j\,v .
+\end{equation}
+
+\section*{Equations of motion}
+\begin{align}
+m_x\,\ddot{x} &= T_A + T_B
+  - \tfrac{1}{2} k_A'\,e_A^{2} + \tfrac{1}{2} k_B'\,e_B^{2}
+  - \phi_x(\dot{x}), \\
+m_y\,\ddot{y} &= T_A - T_B
+  - \tfrac{1}{2} k_A'\,e_A^{2} - \tfrac{1}{2} k_B'\,e_B^{2}
+  - \phi_y(\dot{y}), \\
+I_A\,\ddot{\theta}_A &= \tau_A - r_A\,T_A - \phi_A(\dot{\theta}_A), \\
+I_B\,\ddot{\theta}_B &= \tau_B - r_B\,T_B - \phi_B(\dot{\theta}_B).
+\end{align}
+
+\section*{State-space form}
+\begin{equation}
+\dot{\mathbf{z}} = \mathbf{f}(\mathbf{z}, \mathbf{u}) =
+\begin{bmatrix}
+\dot{x} \\[2pt]
+\dot{y} \\[2pt]
+\dot{\theta}_A \\[2pt]
+\dot{\theta}_B \\[2pt]
+\dfrac{1}{m_x} \left[ T_A + T_B - \tfrac{1}{2} k_A' e_A^{2}
+  + \tfrac{1}{2} k_B' e_B^{2} - \phi_x(\dot{x}) \right] \\[10pt]
+\dfrac{1}{m_y} \left[ T_A - T_B - \tfrac{1}{2} k_A' e_A^{2}
+  - \tfrac{1}{2} k_B' e_B^{2} - \phi_y(\dot{y}) \right] \\[10pt]
+\dfrac{1}{I_A} \left[ \tau_A - r_A T_A - \phi_A(\dot{\theta}_A) \right] \\[10pt]
+\dfrac{1}{I_B} \left[ \tau_B - r_B T_B - \phi_B(\dot{\theta}_B) \right]
+\end{bmatrix}
+\end{equation}
+
+\begin{equation}
+\mathbf{y}_o =
+\begin{bmatrix} 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+                0 & 1 & 0 & 0 & 0 & 0 & 0 & 0 \end{bmatrix} \mathbf{z},
+\qquad
+\mathbf{y}_m =
+\begin{bmatrix} 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+                0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 \end{bmatrix} \mathbf{z}.
+\end{equation}
+
+% =====================================================================
+\section*{CLF-RL training formulation}
+% Follows K. Li, Z. Olkin, Y. Yue, A. D. Ames, "CLF-RL: Control Lyapunov
+% Function Guided Reinforcement Learning", IEEE RA-L 2025, arXiv:2508.09354.
+% Code: gantry_sim/planner.py, gantry_sim/clf.py, gantry_sim/env.py.
+The plant above is used for simulation. Training uses three components, as in CLF-RL:
+(i) a model-based reference generator built on a reduced-order model,
+(ii) a control Lyapunov function (CLF) on the output tracking error, and
+(iii) a reward that combines CLF tracking and CLF decay with regularization.
+The reference and the CLF are used only to compute rewards and critic inputs.
+
+\subsection*{Reduced-order (rigid-belt) model}
+% Plays the role of the H-LIP model in the paper.
+Let $\mathbf{p} = \mathbf{y}_o = [x \;\; y]^{\mathsf T}$ and define
+\begin{equation}
+J = \begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix}, \qquad
+R_r = \operatorname{diag}(r_A, r_B), \qquad
+\boldsymbol{\theta} = [\theta_A \;\; \theta_B]^{\mathsf T}.
+\end{equation}
+With inextensible belts ($e_A = e_B = 0$, hence the $k_i'$ terms vanish) the kinematics are
+$\boldsymbol{\theta} = R_r^{-1} J \mathbf{p}$. Eliminating $T_A$ and $T_B$ from the equations of motion gives
+\begin{align}
+M_r\,\ddot{\mathbf{p}} &= J^{\mathsf T} R_r^{-1}
+  \bigl(\mathbf{u} - \boldsymbol{\phi}_\theta(\dot{\boldsymbol{\theta}})\bigr)
+  - \boldsymbol{\phi}_p(\dot{\mathbf{p}}), \\
+M_r &= \operatorname{diag}(m_x, m_y)
+  + J^{\mathsf T} R_r^{-1} \operatorname{diag}(I_A, I_B) R_r^{-1} J \;\succ 0,
+\end{align}
+with $\boldsymbol{\phi}_p = [\phi_x(\dot x),\, \phi_y(\dot y)]^{\mathsf T}$ and
+$\boldsymbol{\phi}_\theta = [\phi_A(\dot\theta_A),\, \phi_B(\dot\theta_B)]^{\mathsf T}$.
+Because $J$ and $R_r$ are invertible, the map $\mathbf{u} \mapsto \ddot{\mathbf{p}}$ is affine and bijective,
+so the reduced model is fully actuated. Its inverse dynamics are
+\begin{equation}
+\mathbf{u}^{d} = R_r J^{-\mathsf T}\bigl(M_r \ddot{\mathbf{p}}_d + \boldsymbol{\phi}_p(\dot{\mathbf{p}}_d)\bigr)
+  + \boldsymbol{\phi}_\theta\bigl(R_r^{-1} J \dot{\mathbf{p}}_d\bigr).
+\label{eq:invdyn}
+\end{equation}
+The planner always evaluates \eqref{eq:invdyn} with the \emph{nominal} parameters.
+
+\subsection*{Reference generation}
+Each episode is one of two task types.
+
+\emph{Setpoints.} A new goal $\mathbf{p}_k$ is issued every $t_h$ seconds.
+For $t \in [k t_h, (k{+}1) t_h)$ and $\tau = t - k t_h$, the reference is a minimum-jerk move:
+\begin{align}
+\mathbf{p}_d(t) &= \mathbf{p}_{k-1} + (\mathbf{p}_k - \mathbf{p}_{k-1})\, s\!\left(\min(\tau / D_k, 1)\right),
+\qquad s(\sigma) = 10\sigma^3 - 15\sigma^4 + 6\sigma^5, \\
+D_k &= \min \Bigl\{ D \in \mathcal{D} \;:\;
+  \max_{t} \bigl| u^{d}_i(t) \bigr| / \tau_{\max,i} \le \alpha, \; i \in \{A, B\} \Bigr\},
+\end{align}
+where $\mathcal{D}$ is a grid on $[D_{\min}, D_{\max}]$ and $\alpha < 1$ is the torque margin.
+Here $\mathbf{p}_{-1}$ is the initial position.
+
+\emph{Trajectories.} Sums of sines,
+$\mathbf{p}_d(t) = \mathbf{c} + \beta \sum_{m} \mathbf{a}_m \sin(2\pi \mathbf{f}_m t + \boldsymbol{\varphi}_m)$
+(element-wise per axis). The scale $\beta \in (0,1]$ is the largest value on a grid for which
+\eqref{eq:invdyn} stays within $\alpha\,\tau_{\max}$ over the episode.
+
+In both cases $(\mathbf{p}_d, \dot{\mathbf{p}}_d, \ddot{\mathbf{p}}_d)$ is analytic.
+Episodes start on the reference: $\mathbf{z}_0$ has carriage state
+$(\mathbf{p}_d(0) + \boldsymbol{\epsilon},\, \dot{\mathbf{p}}_d(0))$, $\boldsymbol{\epsilon} \sim \mathcal{N}(0, \sigma_0^2 I)$,
+and zero belt stretch.
+
+\subsection*{Control Lyapunov function}
+The output tracking error (paper eq.~7) is
+\begin{equation}
+\boldsymbol{\eta} =
+\begin{bmatrix} \mathbf{p}_d - \mathbf{p} \\ \dot{\mathbf{p}}_d - \dot{\mathbf{p}} \end{bmatrix} \in \mathbb{R}^4,
+\qquad
+\dot{\boldsymbol{\eta}} = A_\eta \boldsymbol{\eta} + B_\eta \mathbf{v}, \quad
+A_\eta = \begin{bmatrix} 0 & I \\ 0 & 0 \end{bmatrix}, \;
+B_\eta = \begin{bmatrix} 0 \\ I \end{bmatrix}, \;
+\mathbf{v} = \ddot{\mathbf{p}}_d - \ddot{\mathbf{p}}.
+\end{equation}
+$P \succ 0$ solves the CARE
+\begin{equation}
+A_\eta^{\mathsf T} P + P A_\eta - P B_\eta R_\eta^{-1} B_\eta^{\mathsf T} P + Q_\eta = 0,
+\qquad
+Q_\eta = \operatorname{diag}(q_p I_2,\, q_v I_2), \;\; R_\eta = \rho I_2,
+\end{equation}
+and the CLF (paper eq.~8) is
+\begin{equation}
+V(\boldsymbol{\eta}) = \boldsymbol{\eta}^{\mathsf T} P \boldsymbol{\eta}.
+\end{equation}
+For $q_p = \omega^4$, $q_v = 2\omega^2$, $\rho = 1$ (critically damped LQR at bandwidth $\omega$), each axis has
+$P_{\text{axis}} = \begin{bmatrix} 2\omega^3 & \omega^2 \\ \omega^2 & 2\omega \end{bmatrix}$.
+
+\paragraph{Gantry analogue of Prop.~1.}
+For the rigid-belt model, the controller
+$\mathbf{u} = R_r J^{-\mathsf T}\bigl(M_r(\ddot{\mathbf{p}}_d + K_\eta \boldsymbol{\eta}) + \boldsymbol{\phi}_p\bigr) + \boldsymbol{\phi}_\theta$,
+with $K_\eta = R_\eta^{-1} B_\eta^{\mathsf T} P$, gives $\mathbf{v} = -K_\eta \boldsymbol{\eta}$. Then
+\begin{equation}
+\dot V = -\boldsymbol{\eta}^{\mathsf T} \bar{Q} \boldsymbol{\eta}
+\le -\lambda_{\mathrm{cert}} V, \qquad
+\bar{Q} = Q_\eta + P B_\eta R_\eta^{-1} B_\eta^{\mathsf T} P, \quad
+\lambda_{\mathrm{cert}} = \frac{\lambda_{\min}(\bar Q)}{\lambda_{\max}(P)}.
+\end{equation}
+So $V$ is a valid CLF for the reduced model.
+On the flexible-belt plant, the relative degree from $\mathbf{u}$ to $\mathbf{p}$ is four, not two,
+so $V$ serves as guidance rather than a certificate. The paper uses its CLF the same way on the full robot.
+The reward's decay rate $\lambda$ is a design parameter. $\lambda_{\mathrm{cert}}$ is very conservative here
+(about $0.07\,\mathrm{s^{-1}}$ for the defaults) because $P$ couples quantities measured in m and m/s.
+
+\subsection*{Reward}
+Let $V_t = V(\boldsymbol{\eta}_t)$, evaluated on the \emph{true} carriage state and the planned reference at step $t$.
+Let $\Delta t$ be the control period and $\mathbf{a}_t \in [-1,1]^2$ the action, with $\mathbf{u}_t = \operatorname{diag}(\tau_{\max}) \mathbf{a}_t$
+held constant over $[t, t+\Delta t)$. The terms are:
+\begin{align}
+r_v &= w_v \exp\!\left( -\frac{V_{t+1}}{\sigma_v} \right),
+  & \sigma_v &= \mu_{\max}(P)\, \eta_{\max}^2,
+  && \text{(CLF tracking)} \\
+r_{\dot v} &= -w_{\dot v}\, \operatorname{clip}\!\left( \frac{\dot V_t + \lambda V_t}{\sigma_{\dot v}},\, 0,\, 1 \right),
+  & \sigma_{\dot v} &= 2\|P\|\, \eta_{\max} \dot\eta_{\max} + \lambda\, \mu_{\max}(P)\, \eta_{\max}^2,
+  && \text{(CLF decay)} \\
+\dot V_t &\approx \frac{V_{t+1} - V_t}{\Delta t}, \\
+r_{\mathrm{reg}} &= -w_\tau \|\mathbf{a}_t\|^2 - w_{\Delta a} \|\mathbf{a}_t - \mathbf{a}_{t-1}\|^2.
+  &&&& \text{(regularization)}
+\end{align}
+The per-step reward is
+\begin{equation}
+R_t =
+\begin{cases}
+r_v + r_{\dot v} + r_{\mathrm{reg}}, & |x_{t+1}|, |y_{t+1}| \le x_{\mathrm{ws}}, \\
+-w_{\mathrm{term}} \text{ and the episode terminates}, & \text{otherwise.}
+\end{cases}
+\end{equation}
+Relative to the paper:
+\begin{itemize}
+  \item There is no holonomic (stance-foot) term.
+  \item The joint-limit term is replaced by workspace termination.
+  \item The "tracking only" ablation sets $w_{\dot v} = 0$.
+  \item The baseline replaces $r_v + r_{\dot v}$ with hand-shaped terms in $\|\mathbf{p}_d - \mathbf{p}\|$ and $\|\dot{\mathbf{p}}_d - \dot{\mathbf{p}}\|$.
+\end{itemize}
+
+\paragraph{Calibrating $\sigma_v$ and $\sigma_{\dot v}$.}
+The paper sets the normalizers from empirical bounds $\eta_{\max}$, $\dot\eta_{\max}$ on $\|\boldsymbol\eta\|$ and $\|\dot{\boldsymbol\eta}\|$.
+Here $P$ is ill-conditioned: $\mu_{\max}(P) = 5.4\times10^4$ weights position error, while $\|\boldsymbol\eta\|$ is dominated by velocity error.
+As a result, $\mu_{\max}(P)\eta_{\max}^2$ bounds $V$ very loosely, and literal empirical bounds give $\sigma_v \approx 334$ and $\sigma_{\dot v} \approx 2.7\times10^4$.
+The scales are therefore set directly on $V$ and $\dot V$:
+\begin{itemize}
+  \item $\sigma_{\dot v}$ is the 95th percentile of $|\dot V|$ under the PD baseline ($\approx 23$). With this value, $r_{\dot v}$ can reach its $-w_{\dot v}$ limit.
+  \item $\sigma_v$ corresponds to a position-equivalent error of about $2\,\mathrm{mm}$, so $r_v$ still has gradient at the sub-millimetre errors that trained policies reach.
+\end{itemize}
+
+\subsection*{Observations (asymmetric actor--critic)}
+The actor $\pi_\theta(\mathbf{a}_t \mid \mathbf{o}_t)$ receives only measured outputs.
+Each encoder reading is $\tilde{\boldsymbol\theta} = \operatorname{quant}(\mathbf{y}_m + \boldsymbol\nu)$ with $\boldsymbol\nu \sim \mathcal{N}(0, \sigma_\theta^2 I)$.
+It is mapped through nominal rigid-belt kinematics and finite-differenced:
+\begin{equation}
+\hat{\mathbf{p}} = \tfrac12 J R_r^{0} \tilde{\boldsymbol\theta}, \qquad
+\hat{\dot{\mathbf{p}}}_t = (\hat{\mathbf{p}}_t - \hat{\mathbf{p}}_{t-1}) / \Delta t.
+\end{equation}
+The actor observation stacks $H$ frames of
+$\bigl[\mathbf{p}_r - \hat{\mathbf{p}},\; \hat{\mathbf{p}},\; \hat{\dot{\mathbf{p}}},\; \dot{\mathbf{p}}_r,\; \mathbf{a}_{t-1}\bigr]$,
+plus previews $\mathbf{p}_r(t + k\Delta t) - \hat{\mathbf{p}}$.
+Here $\mathbf{p}_r$ is either the planned reference $\mathbf{p}_d$ or the raw command (the current goal, or the trajectory).
+The critic $V_\psi(\mathbf{s}_t)$ additionally receives privileged quantities:
+$\boldsymbol{\eta}_t$, $V_t / \sigma_v$, $\ddot{\mathbf{p}}_d$, $\mathbf{p}$, $\dot{\mathbf{p}}$, $R_r \dot{\boldsymbol\theta}$, $e_A$, $e_B$, $t/T$,
+and the episode's domain-randomized parameters.
+The policy is trained with PPO. Actor and critic are MLPs with hidden sizes $[512, 256, 128]$ and ELU activations.
+
+\subsection*{Default values}
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Symbol & Value & Meaning \\
+\hline
+$\omega$ ($q_p, q_v, \rho$) & $30\,\mathrm{rad/s}$ ($8.1\times10^5$, $1.8\times10^3$, $1$) & CLF / LQR design \\
+$\lambda$ & $10\,\mathrm{s^{-1}}$ & required decay rate \\
+$\eta_{\max}$, $\dot\eta_{\max}$ & $5\times10^{-3}$, $0.5$ & formula inputs (scales $1.35$, $283.6$) \\
+$\sigma_v$, $\sigma_{\dot v}$ & $0.2$, $25$ & calibrated scales actually used \\
+$w_v$, $w_{\dot v}$ & $10$, $2$ & as in paper Table I \\
+$w_\tau$, $w_{\Delta a}$, $w_{\mathrm{term}}$ & $0.1$, $0.5$, $100$ & regularization, termination \\
+$\alpha$ & $0.6$ & planner torque margin \\
+$t_h$, $[D_{\min}, D_{\max}]$ & $0.5\,\mathrm{s}$, $[0.05, 0.4]\,\mathrm{s}$ & setpoint timing \\
+$\Delta t$ & $2\,\mathrm{ms}$ & control period (zero-order hold) \\
+\hline
+\end{tabular}
+\end{center}

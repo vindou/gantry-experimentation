@@ -1,0 +1,26 @@
+# Small PPO config for a quick CPU demo run (laptop). Use ppo.yaml on GPU.
+seed: 0
+total_timesteps: 3_000_000
+num_envs: 256
+num_steps: 64               # rollout length per env per update
+update_epochs: 4
+num_minibatches: 8
+gamma: 0.99
+gae_lambda: 0.95
+clip_eps: 0.2
+vf_coef: 0.5
+ent_coef: 0.0
+max_grad_norm: 0.5
+reward_scale: 0.01         # rewards multiplied by this before GAE (CLF reward is up to 10/step)
+lr: 3.0e-4
+anneal_lr: true
+init_log_std: -1.0
+
+activation: elu             # paper: ELU
+actor:
+  hidden: [128, 128]
+critic:
+  hidden: [128, 128]
+
+log_every: 10               # updates
+checkpoint_every: 100       # updates

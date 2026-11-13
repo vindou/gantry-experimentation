@@ -1,0 +1,16 @@
+# Core numerics / ODE solving
+jax==0.12.0.1
+jaxlib==0.12.0.1
+diffrax==0.7.2
+equinox==0.13.8
+numpy==2.5.4
+
+# Configuration
+PyYAML==6.0.3
+
+# Plotting / testing
+matplotlib==3.11.2
+pytest==9.2.0
+
+# RL
+optax==0.2.9

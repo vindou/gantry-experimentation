@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gantry-sim"
+version = "0.1.0"
+description = "JAX simulator and RL training pipeline for a belt-driven gantry"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["gantry_sim*", "rl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,29 @@
+# Stage 1 of the CLF scale search: the tracking scale sigma_v.
+#
+# The decay term is switched off (w_vdot = 0) so sigma_v is tuned in isolation;
+# its effect on r_v = w_v exp(-V / sigma_v) does not depend on sigma_vdot.
+# Position-equivalent error of each sigma_v: sqrt(sigma_v / mu_max(P)), mu_max = 5.4e4
+#   0.025 -> 0.7 mm   0.05 -> 1.0 mm   0.1 -> 1.4 mm   0.2 -> 1.9 mm
+#   0.4 -> 2.7 mm     0.8 -> 3.8 mm    null -> paper formula (1.35 -> 5.0 mm)
+#
+# Selection is on task metrics, NOT on reward: the reward itself changes with sigma_v.
+#
+#   python scripts/experiment.py run experiments/scale_grid_stage1.yaml --gpus 0,1,2,3
+name: scale_grid_stage1
+env_config: configs/gantry.yaml
+ppo_config: configs/ppo.yaml
+seeds: [0, 1, 2]
+base:
+  reward.mode: clf
+  reward.clf.w_vdot: 0.0
+grid:
+  reward.clf.sigma_v: [0.025, 0.05, 0.1, 0.2, 0.4, 0.8, null]
+eval:
+  episodes: 128
+  conditions:
+    in_dist: {}
+    payload: {shift: {m_x: 1.5, m_y: 1.2083}}    # +0.25 kg on the carriage, unseen in training
+objective:
+  condition: in_dist
+  metric: rms_err_mm_mean
+  termination_penalty_mm: 10.0

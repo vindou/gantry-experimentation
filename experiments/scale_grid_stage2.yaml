@@ -1,0 +1,31 @@
+# Stage 2 of the CLF scale search: decay scale sigma_vdot and decay rate lambda,
+# with sigma_v fixed to the stage-1 winner. Pass it on the command line:
+#
+#   python scripts/experiment.py run experiments/scale_grid_stage2.yaml \
+#       --set reward.clf.sigma_v=<best> --name scale_grid_stage2_sv<best> --gpus 0,1,2,3
+#
+# sigma_vdot sets how large (Vdot + lambda V) must be before the decay penalty
+# saturates at -w_vdot. Empirical |Vdot| under PD: p50 0.35, p95 23, p99 62.
+# null -> paper formula 2||P|| eta_max eta_dot_max + lambda mu_max eta_max^2 (~270 + 13.5 lambda).
+# lambda is the demanded exponential decay rate of V [1/s].
+# The `tracking_only` variant is the same-sigma_v control without the decay term.
+name: scale_grid_stage2
+env_config: configs/gantry.yaml
+ppo_config: configs/ppo.yaml
+seeds: [0, 1, 2]
+base:
+  reward.mode: clf
+grid:
+  reward.clf.sigma_vdot: [5.0, 10.0, 25.0, 50.0, 100.0, null]
+  reward.clf.decay_rate: [2.0, 5.0, 10.0]
+variants:
+  tracking_only: {reward.clf.w_vdot: 0.0}
+eval:
+  episodes: 128
+  conditions:
+    in_dist: {}
+    payload: {shift: {m_x: 1.5, m_y: 1.2083}}
+objective:
+  condition: in_dist
+  metric: rms_err_mm_mean
+  termination_penalty_mm: 10.0

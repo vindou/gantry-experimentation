@@ -1,0 +1,4 @@
+# Linux + NVIDIA workstation (e.g. RTX 4090). Install AFTER requirements.txt:
+#   pip install -r requirements.txt -r requirements-gpu.txt
+# cuda12 works with NVIDIA driver >= 525; switch to jax[cuda13] if the driver is >= 580.
+jax[cuda12]==0.12.0.1

@@ -1,0 +1,38 @@
+# Ablation, following the paper's Sec. IV:
+#   * reward: hand-shaped baseline vs CLF tracking-only vs CLF tracking + decay
+#   * CLF scales: calibrated (configs/gantry.yaml) vs the paper's formulas
+#   * actor input: planned reference vs raw command (paper: reference used for the reward only)
+#   * classical PD baseline
+# Robustness is tested on plant changes outside the training randomisation
+# (cf. the paper's displaced torso CoM and +8 kg payload), on the high-fidelity
+# solver, and reported as mean ± std over seeds plus per-episode spread.
+#
+# Run AFTER the scale grid; put the winning scales in configs/gantry.yaml first.
+#   python scripts/experiment.py run experiments/ablation.yaml --gpus 0,1,2,3
+name: ablation
+env_config: configs/gantry.yaml
+ppo_config: configs/ppo.yaml
+seeds: [0, 1, 2, 3, 4]
+variants:
+  pd_baseline:          {_policy: pd}
+  heuristic:            {reward.mode: heuristic}
+  clf_tracking_only:    {reward.mode: clf, reward.clf.w_vdot: 0.0}
+  clf:                  {reward.mode: clf}
+  clf_paper_scales:     {reward.mode: clf, reward.clf.sigma_v: null, reward.clf.sigma_vdot: null}
+  clf_command_obs:      {reward.mode: clf, observation.actor_reference: command}
+eval:
+  episodes: 128
+  conditions:
+    in_dist: {}                                                   # training distribution
+    nominal: {no_randomization: true}
+    payload: {shift: {m_x: 1.5, m_y: 1.2083}}                     # +0.25 kg carriage
+    heavy_payload: {shift: {m_x: 2.0, m_y: 1.4167}}               # +0.5 kg carriage
+    soft_belts: {shift: {belt_A.kappa: 0.6, belt_B.kappa: 0.6}}   # trained on +-30 %
+    high_friction:                                                # trained on +-50 %
+      shift: {fric_x.F_c: 2.0, fric_x.F_s: 2.0, fric_y.F_c: 2.0, fric_y.F_s: 2.0}
+    radius_error: {shift: {belt_A.r: 1.01, belt_B.r: 0.99}}       # pulley calibration error
+    hifi_solver: {integrator: kvaerno5, x64: true, episodes: 32}  # sim-to-sim check
+objective:
+  condition: in_dist
+  metric: rms_err_mm_mean
+  termination_penalty_mm: 10.0
